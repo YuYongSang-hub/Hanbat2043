@@ -13,6 +13,7 @@ from kivy.uix.behaviors import ButtonBehavior
 from kivy.uix.anchorlayout import AnchorLayout
 from kivy.clock import Clock  # Kivy의 Clock을 이용해 딜레이 처리
 from typing import Tuple, Any
+from kivy.properties import ObjectProperty, StringProperty
 from kivy.uix.image import Image
 from infoPage import InfoPage, FontManager
 from progressPage import ProgressPage
@@ -27,24 +28,52 @@ fontName_Regular = 'GowunBatang-Regular.ttf'
 # 기본 16:9 비율 설정 (예: 720x1280)
 target_aspect_ratio = 16 / 9
 
+from kivy.properties import ListProperty
+
+
 class ColoredBox(Widget):
-    def __init__(self, color=(1, 0, 0, 1), **kwargs):  # 기본값은 빨간색
+    """사각형 배경 위젯. KV에서 `color: r, g, b, a`로 설정 가능하도록 구현했습니다."""
+    color = ListProperty([1, 0, 0, 1])  # 기본 빨강
+
+    def __init__(self, **kwargs):
         super(ColoredBox, self).__init__(**kwargs)
         with self.canvas:
-            Color(*color)  # 색 설정 (R, G, B, A)
+            # Color 인스트럭션을 멤버로 보관해 나중에 변경하도록 함
+            self._color_instr = Color(*self.color)
             self.rect = Rectangle(size=self.size, pos=self.pos)
-        # 크기와 위치가 변할 때마다 배경을 다시 그려줍니다.
-        self.bind(size=self.update_rect, pos=self.update_rect)
+
+        # 크기/위치/색상 변경 시 업데이트
+        self.bind(size=self.update_rect, pos=self.update_rect, color=self.update_color)
 
     def update_rect(self, *args):
         self.rect.pos = self.pos
         self.rect.size = self.size
+
+    def update_color(self, instance, value):
+        # ListProperty로부터 색상값이 바뀌면 캔버스 Color 인스트럭션을 갱신
+        if hasattr(self, '_color_instr'):
+            self._color_instr.rgba = value
 class ClickableLabel(ButtonBehavior, Label):
     pass
 
 
 
 class GameScreen(Screen):
+    # KV에서 정의한 위젯들을 매핑하기 위한 프로퍼티
+    main_layout = ObjectProperty(None)
+    text_area = ObjectProperty(None)
+    right_layout = ObjectProperty(None)
+    stat_image_layout = ObjectProperty(None)
+    choice1 = ObjectProperty(None)
+    choice2 = ObjectProperty(None)
+    choice3 = ObjectProperty(None)
+    choice4 = ObjectProperty(None)
+    image_overlay = ObjectProperty(None)
+    image_rect = ObjectProperty(None)
+
+    font_regular = StringProperty(fontName_Regular)
+    font_bold = StringProperty(fontName_Bold)
+
     ability_stat = {"컴퓨터기술": 0, "체력": 0, "운": 1, "허기": 0, "지능": 0, "타자": 0,
                     "속독": 0, "창의력":0, "속도" : 0, "돈": 3, "집중도": 3, "멘탈": 3,"성적": 100,  "sw" : 0, "zoom" : 0, "day" : 0, "팀인원":0, "dinner" : 0, "저녁약속" : 0, "동아리" : 0
                     ,"running" : 0, "service" : 0}
@@ -68,7 +97,7 @@ class GameScreen(Screen):
     def __init__(self, screen_manager=None, **kwargs):
         super(GameScreen, self).__init__(**kwargs)
         self.screen_manager = screen_manager  # ScreenManager 인스턴스 저장
-        self.build()
+        # 레이아웃/위젯은 KV에서 정의되므로 여기서는 초기화만 수행합니다.
 
     @classmethod
     def add_listener(cls, listener):
@@ -89,128 +118,36 @@ class GameScreen(Screen):
         for listener in cls.listeners:
             listener(cls.ability_stat)
 
-    def build(self):
-        print("빌드 실행")
-        # 전체 레이아웃 (수직)
-        self.main_layout = BoxLayout(orientation='vertical')
+    def on_kv_post(self, base_widget):
+        """KV가 로드된 직후 실행되어 위젯 참조를 초기화합니다."""
+        # image_rect가 KV에서 id로 설정되어 있으면 직접 가져오고, 없으면 canvas에서 검색
+        rect_instr = self.ids.get('image_rect')
+        if rect_instr:
+            self.image_rect = rect_instr
+        else:
+            for instr in self.image_overlay.canvas.children:
+                if isinstance(instr, Rectangle):
+                    self.image_rect = instr
+                    break
 
-        # 가운데 부분의 레이아웃 (가로로 나눔)
-        self.middle_layout = BoxLayout(orientation='horizontal', size_hint=(1, 6 / 7))
+        # 텍스트 위젯 이벤트/바인딩 설정
+        if self.text_area:
+            # 텍스트 클릭 및 이미지 overlay 바인딩 설정
+            self.text_area.bind(on_touch_down=self.on_click_next_text)
+            self.text_area.bind(pos=self.update_image_overlay, size=self.update_image_overlay)
 
-        # 텍스트 영역 (가로로 7/8)
-        self.text_area = ClickableLabel(
-            text="",
-            font_size=24,
-            size_hint=(7 / 8, 1),
-            font_name=fontName_Regular,
-            text_size=(720 * 7 / 8, None),
-            halign='left',
-            valign='top',
-            markup=True,
-        )
+        # 이미지 오버레이 초기 상태
+        if self.image_overlay:
+            self.image_overlay.opacity = 0
 
-        # 텍스트 영역 배경을 하얀색으로 설정
-        with self.text_area.canvas.before:
-            Color(0, 0, 0, 1)  # 검은색
-            self.text_bg_rect = Rectangle(size=self.text_area.size, pos=self.text_area.pos)
-
-        # 텍스트 영역 크기 및 위치 변경 시 배경 업데이트
-        self.text_area.bind(size=self.update_text_background, pos=self.update_text_background)
-        self.text_area.bind(on_touch_down=self.on_click_next_text)
-        # 오른쪽 레이아웃 (1/8 공간에 능력창과 진척도창 버튼 추가)
-        self.right_layout = BoxLayout(orientation='vertical', size_hint=(1 / 8, 1))
-
-        # 능력창 및 진척도창 버튼 추가
-        self.ability_button = Button(text="능력창", font_name=fontName_Regular, size_hint=(1, 0.15))
-        self.progress_button = Button(text="진척도", font_name=fontName_Regular, size_hint=(1, 0.15))
-
-        self.ability_button.bind(on_press=self.open_info_page)
-        self.progress_button.bind(on_press=self.open_progress_page)
-
-        # 빈 공간을 검은색으로 설정
-        self.black_space = ColoredBox(color=(0, 0, 0, 1), size_hint=(1, 0.5))
-
-        # 오른쪽 레이아웃에 버튼과 빈 공간 추가 (버튼은 상단 정렬)
-        self.right_layout.add_widget(self.ability_button)
-        self.right_layout.add_widget(self.progress_button)
-        self.stat_image_layout = BoxLayout(orientation='vertical', size_hint=(1, 0.4))
-        self.right_layout.add_widget(self.stat_image_layout)
-        self.right_layout.add_widget(self.black_space)
-
-        # 하단 선택지 영역 (수직으로 4개 선택지 배치)
-        self.choice_layout = BoxLayout(orientation='vertical', size_hint=(1, 1 / 4))
-
-        # 선택지 버튼들
-        self.choice1 = Button(font_name=fontName_Bold, background_normal='', background_down='',
-                              background_color=(0, 0, 0, 1))
-        self.choice2 = Button(font_name=fontName_Bold, background_normal='', background_down='',
-                              background_color=(0, 0, 0, 1))
-        self.choice3 = Button(font_name=fontName_Bold, background_normal='', background_down='',
-                              background_color=(0, 0, 0, 1))
-        self.choice4 = Button(font_name=fontName_Bold, background_normal='', background_down='',
-                              background_color=(0, 0, 0, 1))
-
-        # 각 버튼에 이벤트 핸들러 연결
-        self.choice1.bind(on_press=self.on_choice)
-        self.choice2.bind(on_press=self.on_choice)
-        self.choice3.bind(on_press=self.on_choice)
-        self.choice4.bind(on_press=self.on_choice)
-
-        # AnchorLayout을 사용하여 버튼을 아래쪽에 추가
-        choice_anchor1 = AnchorLayout(anchor_y='bottom')
-        choice_anchor1.add_widget(self.choice1)
-
-        choice_anchor2 = AnchorLayout(anchor_y='bottom')
-        choice_anchor2.add_widget(self.choice2)
-
-        choice_anchor3 = AnchorLayout(anchor_y='bottom')
-        choice_anchor3.add_widget(self.choice3)
-
-        choice_anchor4 = AnchorLayout(anchor_y='bottom')
-        choice_anchor4.add_widget(self.choice4)
-
-        # choice_layout에 버튼들을 추가
-        self.choice_layout.add_widget(choice_anchor4)
-        self.choice_layout.add_widget(choice_anchor3)
-        self.choice_layout.add_widget(choice_anchor2)
-        self.choice_layout.add_widget(choice_anchor1)
-
-        # 가운데 레이아웃에 텍스트 영역과 오른쪽 하얀색 공간 추가
-        self.middle_layout.add_widget(self.text_area)  # 텍스트 영역 (7/8)
-        self.middle_layout.add_widget(self.right_layout)  # 오른쪽 능력창, 진척도창, 검은색 공간 (1/8)
-
-        # 메인 레이아웃에 가운데 레이아웃, 선택지 영역 순서대로 추가
-        self.main_layout.add_widget(self.middle_layout)  # 가운데 레이아웃 (텍스트 + 오른쪽 버튼 및 빈 공간)
-        self.main_layout.add_widget(self.choice_layout)  # 선택지 영역
-
-        # 메인 레이아웃을 먼저 추가
-        self.add_widget(self.main_layout)
-
-        self.image_overlay = Widget()
-        with self.image_overlay.canvas:
-            self.image_rect = Rectangle(
-                source="",  # 초기 상태에서 이미지를 비움
-                size=(self.text_area.size[0], self.text_area.size[1] / 2),
-                pos=(self.text_area.pos[0], self.text_area.pos[1] + self.text_area.size[1] / 2)
-            )
-
-        self.image_overlay.opacity = 0
-
-        # 텍스트 영역과 이미지 레이아웃 크기 및 위치 동기화
-        self.text_area.bind(pos=self.update_image_overlay, size=self.update_image_overlay)
-
-        # 이미지 오버레이를 텍스트 위에 배치
-        self.add_widget(self.image_overlay)
-
-        # 윈도우 사이즈 변경 이벤트 핸들러 추가
+        # 윈도우 리사이즈 바인딩 및 스탯 초기화
         Window.bind(on_resize=self.adjust_layout)
-
         self.update_stat_images()
-
     def update_text_background(self, *args):
-        """텍스트 영역 배경 업데이트."""
-        self.text_bg_rect.size = self.text_area.size
-        self.text_bg_rect.pos = self.text_area.pos
+        """텍스트 영역 배경 업데이트 (KV에서 처리하는 경우 안전하게 무시)."""
+        if hasattr(self, 'text_bg_rect') and self.text_bg_rect:
+            self.text_bg_rect.size = self.text_area.size
+            self.text_bg_rect.pos = self.text_area.pos
 
     def update_image_overlay(self, *args):
         """이미지 레이아웃 업데이트."""

@@ -16,6 +16,7 @@ class MyGameApp(App):
 
         Builder.load_file('main_menu.kv')
         Builder.load_file('ending_screen.kv')
+        Builder.load_file('game_screen.kv')
 
         sm.add_widget(MainMenu(name='mainmenu'))  # 스크린에 추가 스크린을 상속받은 클래스만 바로 추가 가능
 
