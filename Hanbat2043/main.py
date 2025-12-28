@@ -3,20 +3,33 @@ from kivy.config import Config
 from kivy.app import App
 from kivy.uix.screenmanager import ScreenManager, Screen
 from kivy.lang import Builder
-from main_menu import MainMenu
-from game_screen import GameScreen
-from ending_screen import EndingScreen
-from infoPage import InfoPage, FontManager
-from progressPage import ProgressPage
+import os
+base_dir = os.path.dirname(__file__)
+from kivy.core.text import LabelBase
+
+# Register fonts used throughout the app (map logical font names or filenames to actual files present in the repo)
+fonts_dir = os.path.join(base_dir, 'assets', 'fonts')
+LabelBase.register(name='NanumGothic.ttf', fn_regular=os.path.join(fonts_dir, 'NanumGothic.ttf'))
+LabelBase.register(name='GowunBatang-Bold.ttf', fn_regular=os.path.join(fonts_dir, 'GowunBatang-Bold.ttf'))
+LabelBase.register(name='GowunBatang-Regular.ttf', fn_regular=os.path.join(fonts_dir, 'GowunBatang-Regular.ttf'))
+LabelBase.register(name='Malgun Gothic', fn_regular=os.path.join(fonts_dir, 'malgunbd.ttf'))
+# Some code expects 'H2GPRM' font name; map it to an available font
+LabelBase.register(name='H2GPRM', fn_regular=os.path.join(fonts_dir, 'NanumGothic.ttf'))
+
+from screens.main_menu.main_menu import MainMenu
+from screens.game.game_screen import GameScreen
+from screens.ending.ending_screen import EndingScreen
+from screens.info.infoPage import InfoPage, FontManager
+from screens.progress.progressPage import ProgressPage
 
 
 class MyGameApp(App):
     def build(self):
         sm = ScreenManager()
 
-        Builder.load_file('main_menu.kv')
-        Builder.load_file('ending_screen.kv')
-        Builder.load_file('game_screen.kv')
+        Builder.load_file(os.path.join(base_dir, 'Screens', 'main_menu', 'main_menu.kv'))
+        Builder.load_file(os.path.join(base_dir, 'Screens', 'ending', 'ending_screen.kv'))
+        Builder.load_file(os.path.join(base_dir, 'Screens', 'game', 'game_screen.kv'))
 
         sm.add_widget(MainMenu(name='mainmenu'))  # 스크린에 추가 스크린을 상속받은 클래스만 바로 추가 가능
 
