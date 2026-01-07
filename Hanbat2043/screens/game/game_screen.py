@@ -129,6 +129,7 @@ class GameScreen(Screen):
                     self.image_rect = instr
                     break
 
+
         # 텍스트 위젯 이벤트/바인딩 설정
         if self.text_area:
             # 텍스트 클릭 및 이미지 overlay 바인딩 설정
@@ -262,7 +263,30 @@ class GameScreen(Screen):
 
     # 자동으로 텍스트를 출력하는 함수 이벤트 분기 확인
     def start_automatic_text(self, dt=None):
-        if self.day % 2 == 0:
+        self.update_day_flag()
+
+        while self.current_line < len(self.story_lines):
+        line = self.story_lines[self.current_line].strip()
+
+        if self.handle_reaction_search(line):
+            return
+
+        if self.handle_script_command(line):
+            return
+
+        if self.handle_choice_block(line):
+            return
+
+        if self.handle_reaction_entry(line):
+            return
+
+        if self.handle_reaction_exit(line):
+            return
+
+        self.handle_normal_text(line)
+        return
+        
+        if self.day % 2 == 0: #날짜에 따른 용돈 주기
             self.ability_stat["day"] = 1
         else:
             self.ability_stat["day"] = 0
@@ -408,6 +432,91 @@ class GameScreen(Screen):
             Clock.schedule_once(self.start_automatic_text, 0.5)
         elif self.day == 12: #13주차
             self.load_ending_branch()
+
+    def update_day_flag(self):
+        self.ability_stat["day"] = 1 if self.day % 2 == 0 else 0
+
+    def handle_script_command(self, line):
+        if line.startswith("f:I"):
+            filename = line[3:].strip()
+            self.update_image_source(filename)
+            self.image_overlay.opacity = 1
+            self.text_area.text = "\n\n\n\n\n"
+            self.current_line += 1
+            Clock.schedule_once(self.start_automatic_text, 0.5)
+            return True
+    
+        if line.startswith("f:A"):
+            filename = line[3:].strip()
+            if filename:
+                self.play_audio(filename)
+            else:
+                self.fade_out_audio()
+            self.current_line += 1
+            return True
+    
+        return False
+
+    def handle_choice_block(self, line):
+        if line.startswith("-"):
+            self.is_waiting_for_click = False
+            self.on_choice_able = True
+            self.set_choices_from_story(self.current_line)
+            return True
+        return False
+
+    def handle_reaction_entry(self, line):
+        if line.startswith("#") and not self.reaction_part:
+            self.reaction_line = line
+    
+            while ":" in self.reaction_line and "?" in self.reaction_line:
+                self.reaction_line = "#" + self.parse_conditional_reaction(
+                    self.reaction_line[1:]
+                )
+    
+            self.load_alternate_story(self.current_line + 1, self.reaction_line)
+            return True
+    
+        return False
+
+    def handle_reaction_search(self, line):
+        if not self.reaction_part:
+            return False
+    
+        if self.reaction_line == "# lecture":
+            num = random.randint(1, 3)
+            self.reaction_line = f"# lecture_{num + 3*self.ability_stat['dinner']}"
+    
+        if line.startswith("#") and line == self.reaction_line:
+            self.flag = True
+            self.current_line += 1
+            return False
+    
+        if not self.flag:
+            self.current_line += 1
+            return True
+    
+        return False
+        
+
+    def handle_reaction_exit(self, line):
+        if (line.startswith("#") and line != self.reaction_line) or line == "pass":
+            self.reaction_part = False
+            self.story_lines = self.read_story_text(self.save_file_name).splitlines()
+            self.current_line = self.saved_re_position + 1
+            Clock.schedule_once(self.start_automatic_text, 0.5)
+            return True
+        return False
+
+    def handle_normal_text(self, line):
+        if line == "":
+            self.is_waiting_for_click = True
+            return
+    
+        self.text_area.text += line + "\n"
+        self.current_line += 1
+        Clock.schedule_once(self.start_automatic_text, 0.5)
+
 
     def update_image_source(self, image_path):
         """이미지 오버레이에 새로운 이미지를 설정."""
