@@ -286,99 +286,6 @@ class GameScreen(Screen):
         self.handle_normal_text(line)
         return
         
-        if self.day % 2 == 0: #날짜에 따른 용돈 주기
-            self.ability_stat["day"] = 1
-        else:
-            self.ability_stat["day"] = 0
-        while self.current_line < len(self.story_lines):  # 전체 내용 탐색
-            line = self.story_lines[self.current_line].strip()  # 한 줄씩 입력받음
-
-            if self.reaction_part:  # 리액션 파트에 돌입했을 경우
-                # 내가 원하는 부분이 나올 때까지 탐색하는 부분
-                if self.reaction_line == "# lecture":
-                    num = random.randint(1, 3)
-                    self.reaction_line = f"# lecture_{num+3*self.ability_stat['dinner']}"
-                if line.startswith("#") and line == self.reaction_line:  # 내가 원하는 리액션 파트 진입
-                    print("내가 원하는 리액션 파트 진입 성공")
-                    print(self.file_name, self.current_line, line)
-                    self.flag = True  # 텍스트 출력 활성화
-                    self.current_line += 1  # 다음 줄 탐색
-                    continue
-                elif not self.flag:  # 내가 원하는 리액션 파트가 아닌 경우
-                    self.current_line += 1  # 다음 줄 탐색
-                    continue  # 다음 줄을 즉시 탐색
-            if self.flag:
-                print(self.file_name, self.current_line, line)
-
-                # ===============================
-                # f:I → 이미지 표시
-                # ===============================
-                if line.startswith("f:I"):
-                    image_name = line[3:].strip()  # 파일명만
-                    image_path = IMAGE_BASE_PATH + image_name
-
-                    print(f"이미지 로드: {image_path}")
-
-                    self.update_image_source(image_path)
-                    self.image_overlay.opacity = 1
-                    self.text_area.text = "\n\n\n\n\n"
-
-                    self.current_line += 1
-                    Clock.schedule_once(self.start_automatic_text, 0.5)
-                    return
-
-                # ===============================
-                # f:A → 오디오 재생
-                # ===============================
-                elif line.startswith("f:A"):
-                    audio_name = line[3:].strip()  # 파일명만
-                    audio_path = SOUND_BASE_PATH + audio_name if audio_name else ""
-
-                    if audio_path:
-                        print(f"사운드 로드: {audio_path}")
-                        self.play_audio(audio_path)
-                    else:
-                        print("사운드 페이드 아웃 요청")
-                        self.fade_out_audio()
-
-                    self.current_line += 1
-                    continue
-                elif line == "":  # 빈 줄일 경우 클릭 대기
-                    print("빈줄 실행")
-                    self.is_waiting_for_click = True  # True일 경우 텍스트 화면 클릭시 다음 줄 텍스트가 출력됨
-                    return
-                elif line.startswith("-"):  # 선택지 항목이면 버튼 텍스트로 설정하고 넘김
-                    #자동으로 선택지 있는 부분을 읽음
-                    self.is_waiting_for_click = False
-                    self.on_choice_able = True
-                    self.set_choices_from_story(self.current_line)
-                    return
-                elif line.startswith("#") and not self.reaction_part:  # 첫 번째 글자가 #일 때, 리액션 파트가 아닐 경우
-                    self.reaction_line = line
-                    while ":" in self.reaction_line and "?" in self.reaction_line:  # 조건문이 포함된 경우 파싱
-                        print("조건이 포함된 리액션 파트 발견")
-                        # `self.reaction_line`에서 조건문을 파싱
-                        self.reaction_line = "#" + self.parse_conditional_reaction(self.reaction_line[1:])  # '#' 이후 전달
-                    print("랜덤 이벤트 OR 리액션 파트 진입 성공")
-                    self.load_alternate_story(self.current_line + 1,
-                                              self.reaction_line)  # 세이브 텍스트 라인 설정 후 이벤트 스토리 or 리액션 파트 진입
-                    return
-                elif (line.startswith("#") and line != self.reaction_line) or line == "pass":
-                    # 리액션 파트에 속해 있을 때, 다른 #을 썼을 경우. 혹은 pass라는 line을 썼을 경우
-                    print("리액션 파트 종료")
-                    self.reaction_part = False
-                    self.story_lines = self.read_story_text(self.save_file_name).splitlines()  # 이전 스토리 파일 호출
-                    self.current_line = self.saved_re_position + 1  # 저장된 위치로 돌아감
-                    Clock.schedule_once(self.start_automatic_text, 0.5)
-                    return
-                else:
-                    # 일반 텍스트는 출력 (한 줄씩)
-                    self.text_area.text += line + "\n"
-                    self.current_line += 1
-
-                    # 다음 줄을 0.5초 후에 출력
-                    Clock.schedule_once(self.start_automatic_text, 0.5)
-                    return
         # 리액션 파트에서 모든 텍스트를 출력한 후 기존 파일로 복귀
         if self.reaction_part:
             print("리액션 파트 종료")
@@ -433,9 +340,11 @@ class GameScreen(Screen):
         elif self.day == 12: #13주차
             self.load_ending_branch()
 
+    #--- 짝수별로 돈 추가 ---#
     def update_day_flag(self):
         self.ability_stat["day"] = 1 if self.day % 2 == 0 else 0
 
+    #--- 이미지 or 오디오 커맨드 판별 ---#
     def handle_script_command(self, line):
         if line.startswith("f:I"):
             filename = line[3:].strip()
@@ -456,7 +365,8 @@ class GameScreen(Screen):
             return True
     
         return False
-
+    
+    #--- 선택지 텍스트 판별, 선택지 버튼 생성 ---#
     def handle_choice_block(self, line):
         if line.startswith("-"):
             self.is_waiting_for_click = False
@@ -465,6 +375,7 @@ class GameScreen(Screen):
             return True
         return False
 
+    #--- 리액션 파일 진입 전, 조건문 파싱 ---#
     def handle_reaction_entry(self, line):
         if line.startswith("#") and not self.reaction_part:
             self.reaction_line = line
@@ -479,11 +390,12 @@ class GameScreen(Screen):
     
         return False
 
+    #--- 리액션 파트 진입, 세부사항 판별 ---#
     def handle_reaction_search(self, line):
         if not self.reaction_part:
             return False
     
-        if self.reaction_line == "# lecture":
+        if self.reaction_line == "# lecture": #일상 루트, 강의 전용 리액션 파일 진입
             num = random.randint(1, 3)
             self.reaction_line = f"# lecture_{num + 3*self.ability_stat['dinner']}"
     
@@ -498,16 +410,19 @@ class GameScreen(Screen):
     
         return False
         
-
+    #--- 리액션 파일 탈출 로직---#
     def handle_reaction_exit(self, line):
+        # 또 다른 리액션 파트에 도달하거나 pass를 확인하면 탈출
         if (line.startswith("#") and line != self.reaction_line) or line == "pass":
             self.reaction_part = False
+            # 저장된 파일, 텍스트로 이동동
             self.story_lines = self.read_story_text(self.save_file_name).splitlines()
             self.current_line = self.saved_re_position + 1
             Clock.schedule_once(self.start_automatic_text, 0.5)
             return True
         return False
 
+    #--- 다음 텍스트 출력 로직 ---#
     def handle_normal_text(self, line):
         if line == "":
             self.is_waiting_for_click = True
