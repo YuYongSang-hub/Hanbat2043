@@ -287,60 +287,6 @@ class GameScreen(Screen):
             return
 
         self.handle_story_end()
-        
-        # 리액션 파트에서 모든 텍스트를 출력한 후 기존 파일로 복귀
-        if self.reaction_part:
-            print("리액션 파트 종료")
-            self.story_lines = self.read_story_text(self.save_file_name).splitlines()  # 기존 텍스트 파일 호출
-            self.current_line = self.saved_re_position + 1  # 저장된 위치로 돌아감
-            #리액션 파트는 다른 이벤트나 시작, 메인 스토리에서도 호출 될 수 있게 다른 텍스트 위치 저장 변수를 사용함.
-            self.reaction_part = False
-            Clock.schedule_once(self.start_automatic_text, 0.5)
-        elif self.end: # 게임 엔딩 로직
-            self.previous_name = "mainmenu"
-            self.end_game()
-        elif self.start:  # 종료 텍스트 파일이 start_story인 경우. 1회 실행
-            self.story_lines = self.read_story_text(os.path.join(STORY_DIR, 'main_story.txt')).splitlines()
-            self.current_line = 0
-            self.start = False
-            self.day += 1
-            self.text_area.text += f"{self.day}일차입니다.\n"
-            Clock.schedule_once(self.start_automatic_text, 0.5)
-        elif self.event:  # 이벤트 스토리에서 종료 됐을 시
-            print("이벤트 스토리 종료 메인 스토리 위치로 돌아갑니다.")
-            if self.file_name == os.path.join(STORY_DIR, 'event_story', 'i.txt'):
-                self.current_line = 79
-            else:
-                self.current_line = self.saved_position + 1  # 저장된 위치로 돌아감
-            self.story_lines = self.read_story_text(os.path.join(STORY_DIR, 'main_story.txt')).splitlines()  # 메인 스토리 호출
-            Clock.schedule_once(self.start_automatic_text, 0.5)
-            self.event = False
-        elif self.day == 4:  # 메인 스토리 루트가 5주차 진입 시 중간고사 이벤트
-            self.day += 1
-            self.story_lines = self.read_story_text(os.path.join(STORY_DIR, 'middle_story.txt')).splitlines()
-            self.current_line = 0
-            Clock.schedule_once(self.start_automatic_text, 0.5)
-        elif self.day <= 10 and self.day != 9:  # 메인 스토리 루틴 11주차까지 진행
-            print("메인스토리 루트 진행")
-            self.story_lines = self.read_story_text(os.path.join(STORY_DIR, 'main_story.txt')).splitlines()
-            self.current_line = 0
-            self.day += 1
-            self.text_area.text += f"{self.day}일차입니다.\n"
-            Clock.schedule_once(self.start_automatic_text, 0.5)
-        elif self.day == 9:  # 조별과제 10주차
-            print("조별과제 엔딩 루트 진행")
-            self.story_lines = self.read_story_text(os.path.join(STORY_DIR, 'group_task', 'result', f"{self.ability_stat['팀인원']}.txt")).splitlines()
-            self.current_line = 0
-            self.day += 1
-            self.text_area.text += f"{self.day}일차입니다.\n"
-            Clock.schedule_once(self.start_automatic_text, 0.5)
-        elif self.day == 11: #12주차 기말고사 and end스토리 진입
-            self.story_lines = self.read_story_text(os.path.join(STORY_DIR, 'end_story.txt')).splitlines()
-            self.current_line = 0
-            self.day += 1
-            Clock.schedule_once(self.start_automatic_text, 0.5)
-        elif self.day == 12: #13주차
-            self.load_ending_branch()
 
     #--- 짝수별로 돈 추가 ---#
     def update_day_flag(self):
@@ -392,7 +338,7 @@ class GameScreen(Screen):
     
         return False
 
-    #--- 리액션 파트 진입, 세부사항 판별 ---#
+    #--- 리액션 파트 진입, 정확한 리액션 파일 위치 탐색 ---#
     def handle_reaction_search(self, line):
         if not self.reaction_part:
             return False
@@ -434,6 +380,8 @@ class GameScreen(Screen):
         self.current_line += 1
         Clock.schedule_once(self.start_automatic_text, 0.5)
 
+    
+    #--- 스토리 진행 로직 ---#
     def handle_story_end(self):
         # 1) reaction 종료 복귀
         if self.reaction_part:
@@ -463,6 +411,75 @@ class GameScreen(Screen):
         # 5) 이후 day 루틴/분기들
         self._advance_day_routine()
 
+    #--- 첫 날 전용 로직 ---#
+    def _enter_main_story_first_time(self):
+    self.story_lines = self.read_story_text(os.path.join(STORY_DIR, 'main_story.txt')).splitlines()
+    self.current_line = 0
+    self.start = False
+    self.day += 1
+    self.text_area.text += f"{self.day}일차입니다.\n"
+    Clock.schedule_once(self.start_automatic_text, 0.5)
+
+    #--- 이벤트 스토리 종료 로직 ---#
+    def _return_from_event_story(self):
+        print("이벤트 스토리 종료 메인 스토리 위치로 돌아갑니다.")
+    
+        # i.txt는 특수 복귀 지점(하드코딩) 유지
+        if self.file_name == os.path.join(STORY_DIR, 'event_story', 'i.txt'):
+            self.current_line = 79
+        else:
+            # 이벤트 진입 전에 저장해둔 메인 스토리 위치로 복귀
+            self.current_line = self.saved_position + 1
+    
+        self.story_lines = self.read_story_text(os.path.join(STORY_DIR, 'main_story.txt')).splitlines()
+        self.event = False
+        Clock.schedule_once(self.start_automatic_text, 0.5)
+
+    #--- 메인 스토리 처리 로직 ---#
+    def _advance_day_routine(self):
+        # 메인 스토리 루트가 5주차 진입 시 중간고사 이벤트
+        if self.day == 4:
+            self.day += 1
+            self.story_lines = self.read_story_text(os.path.join(STORY_DIR, 'middle_story.txt')).splitlines()
+            self.current_line = 0
+            Clock.schedule_once(self.start_automatic_text, 0.5)
+            return
+    
+        # 메인 스토리 루틴 11주차까지 진행 (단, 10주차인 day==9는 조별과제로 분기)
+        if self.day <= 10 and self.day != 9:
+            print("메인스토리 루트 진행")
+            self.story_lines = self.read_story_text(os.path.join(STORY_DIR, 'main_story.txt')).splitlines()
+            self.current_line = 0
+            self.day += 1
+            self.text_area.text += f"{self.day}일차입니다.\n"
+            Clock.schedule_once(self.start_automatic_text, 0.5)
+            return
+    
+        # 조별과제 엔딩 루트 진행 (10주차)
+        if self.day == 9:
+            print("조별과제 엔딩 루트 진행")
+            path = os.path.join(
+                STORY_DIR, 'group_task', 'result', f"{self.ability_stat['팀인원']}.txt"
+            )
+            self.story_lines = self.read_story_text(path).splitlines()
+            self.current_line = 0
+            self.day += 1
+            self.text_area.text += f"{self.day}일차입니다.\n"
+            Clock.schedule_once(self.start_automatic_text, 0.5)
+            return
+    
+        # 12주차: 기말고사 and end스토리 진입
+        if self.day == 11:
+            self.story_lines = self.read_story_text(os.path.join(STORY_DIR, 'end_story.txt')).splitlines()
+            self.current_line = 0
+            self.day += 1
+            Clock.schedule_once(self.start_automatic_text, 0.5)
+            return
+    
+        # 13주차: 엔딩 분기
+        if self.day == 12:
+            self.load_ending_branch()
+            return
 
     def update_image_source(self, image_path):
         """이미지 오버레이에 새로운 이미지를 설정."""
