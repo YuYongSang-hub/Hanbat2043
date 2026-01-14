@@ -266,25 +266,27 @@ class GameScreen(Screen):
         self.update_day_flag()
 
         while self.current_line < len(self.story_lines):
-        line = self.story_lines[self.current_line].strip()
-
-        if self.handle_reaction_search(line):
+            line = self.story_lines[self.current_line].strip()
+    
+            if self.handle_reaction_search(line):
+                return
+    
+            if self.handle_script_command(line):
+                return
+    
+            if self.handle_choice_block(line):
+                return
+    
+            if self.handle_reaction_entry(line):
+                return
+    
+            if self.handle_reaction_exit(line):
+                return
+    
+            self.handle_normal_text(line)
             return
 
-        if self.handle_script_command(line):
-            return
-
-        if self.handle_choice_block(line):
-            return
-
-        if self.handle_reaction_entry(line):
-            return
-
-        if self.handle_reaction_exit(line):
-            return
-
-        self.handle_normal_text(line)
-        return
+        self.handle_story_end()
         
         # 리액션 파트에서 모든 텍스트를 출력한 후 기존 파일로 복귀
         if self.reaction_part:
@@ -294,7 +296,7 @@ class GameScreen(Screen):
             #리액션 파트는 다른 이벤트나 시작, 메인 스토리에서도 호출 될 수 있게 다른 텍스트 위치 저장 변수를 사용함.
             self.reaction_part = False
             Clock.schedule_once(self.start_automatic_text, 0.5)
-        elif self.end:
+        elif self.end: # 게임 엔딩 로직
             self.previous_name = "mainmenu"
             self.end_game()
         elif self.start:  # 종료 텍스트 파일이 start_story인 경우. 1회 실행
@@ -431,6 +433,35 @@ class GameScreen(Screen):
         self.text_area.text += line + "\n"
         self.current_line += 1
         Clock.schedule_once(self.start_automatic_text, 0.5)
+
+    def handle_story_end(self):
+        # 1) reaction 종료 복귀
+        if self.reaction_part:
+            print("리액션 파트 종료")
+            self.story_lines = self.read_story_text(self.save_file_name).splitlines()
+            self.current_line = self.saved_re_position + 1
+            self.reaction_part = False
+            Clock.schedule_once(self.start_automatic_text, 0.5)
+            return
+    
+        # 2) 엔딩
+        if self.end:
+            self.previous_name = "mainmenu"
+            self.end_game()
+            return
+    
+        # 3) ✅ start_story 종료 후 1회성 메인 진입
+        if self.start:
+            self._enter_main_story_first_time()
+            return
+    
+        # 4) 이벤트 스토리 종료 처리
+        if self.event:
+            self._return_from_event_story()
+            return
+    
+        # 5) 이후 day 루틴/분기들
+        self._advance_day_routine()
 
 
     def update_image_source(self, image_path):
