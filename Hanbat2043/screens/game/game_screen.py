@@ -97,6 +97,8 @@ class GameScreen(Screen):
         super(GameScreen, self).__init__(**kwargs)
         self.screen_manager = screen_manager  # ScreenManager 인스턴스 저장
         # 레이아웃/위젯은 KV에서 정의되므로 여기서는 초기화만 수행합니다.
+        self.reaction_index = {}          # ✅ 현재 로드된 리액션 파일의 #태그 인덱스
+        self.reaction_index_file = None   # ✅ 인덱스가 어떤 파일 기준인지
 
     @classmethod
     def add_listener(cls, listener):
@@ -354,6 +356,7 @@ class GameScreen(Screen):
     
         if not self.flag:
             self.current_line += 1
+            Clock.schedule_once(self.start_automatic_text, 0) 
             return True
     
         return False
@@ -887,8 +890,23 @@ class GameScreen(Screen):
             # 스토리가 끝났을 때 이전 파일로 돌아감
             self.saved_re_position = saved_position
             self.reaction_part = True  # 리액션 파일 진입 확인 변수
-            self.flag = False  # 리액션 파일에 내가 원하는 부분이 나오기 전까지 자동 텍스트 출력 패스
+            # ✅ 인덱스 생성
+            self.reaction_index = self.build_reaction_index(self.story_lines)
+            self.reaction_index_file = reaction_path
+        
+            # ✅ 이제 flag 탐색이 아니라, 바로 점프할 거라서 flag 필요 없음(일단은 유지해도 됨)
+            self.flag = True  # 혹은 아예 안 쓰게 만들 예정
             Clock.schedule_once(self.start_automatic_text, 0.5)
+
+    def build_reaction_index(self, lines):
+        index = {}
+        for i, raw in enumerate(lines):
+            s = raw.strip()
+            if s.startswith("#"):
+                # 같은 태그가 여러 번 나오면 첫 번째만 쓰거나, 마지막으로 덮어쓰거나 정책 선택
+                # 여기서는 "첫 번째만" 채택
+                index.setdefault(s, i)
+        return index
 
     def sub_event_story(self):
         sub_event_list = ["a.txt", "b.txt", "c.txt", "d.txt", "e.txt", "f.txt", "g.txt", "h.txt", "i.txt", "j.txt"]
